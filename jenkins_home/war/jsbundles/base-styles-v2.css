@@ -1448,12 +1448,6 @@ TABLE.fingerprint-in-build TD {
   background-color: #eaeff2;
   background-color: var(--plugin-manager-bg-color-already-upgraded);
 }
-#plugins tr.has-dependents input.uninstall {
-  background-color: #e0e0e0;
-  border: 1px solid #cccccc;
-  color: #505050;
-  background-color: white;
-}
 #plugins tr.all-dependents-disabled .enable input {
   pointer-events: auto;
   opacity: 1;
@@ -1462,7 +1456,7 @@ TABLE.fingerprint-in-build TD {
 #plugins tr.has-dependents input,
 #plugins tr.has-disabled-dependency .enable input {
   pointer-events: none;
-  opacity: 0.2;
+  opacity: 0.5;
 }
 #plugins tr.has-dependents-but-disabled .enable input {
   pointer-events: auto;
@@ -2272,11 +2266,23 @@ body.no-sticker #bottom-sticker {
   background-color: #fff;
   background-color: var(--menu-bg-color);
 }
+/* Overrides for treeview-skin.css */
 .ygtvlabel,
 .ygtvlabel:link,
 .ygtvlabel:visited,
 .ygtvlabel:hover {
   color: inherit;
+}
+.ygtvfocus {
+  background-color: #eaeff2 !important;
+  background-color: var(--panel-header-bg-color, #c0e0e0) !important;
+}
+.ygtvfocus .ygtvlabel,
+.ygtvfocus .ygtvlabel:link,
+.ygtvfocus .ygtvlabel:visited,
+.ygtvfocus .ygtvlabel:hover {
+  background-color: #eaeff2 !important;
+  background-color: var(--panel-header-bg-color, #c0e0e0) !important;
 }
 DIV.yahooTree td {
   vertical-align: middle;
@@ -3873,6 +3879,100 @@ table.bigtable.sortable span.sortarrow {
   .manage-page__column {
     width: 25%;
   }
+}
+.content-block {
+  border-radius: 4px;
+  border: 2px solid #eaeff2;
+  border: 2px solid var(--light-grey);
+}
+.content-block__body {
+  padding: 1.5rem;
+}
+.content-block__body > *:first-child {
+  margin-top: 0;
+}
+.content-block__body > *:last-child {
+  margin-bottom: 0;
+}
+.content-block__footer {
+  background-color: #eaeff2;
+  background-color: var(--light-grey);
+  padding: 0.5rem 1.5rem;
+}
+.content-block__link-list {
+  padding: 0;
+}
+.content-block__link-list li {
+  list-style: none;
+  width: 100%;
+}
+.content-block__link-list li:not(:last-child) {
+  margin-bottom: 0.75rem;
+}
+.content-block__link {
+  padding: 0.5rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  background-color: #eaeff2;
+  background-color: var(--light-grey);
+  -webkit-text-decoration: none;
+  -webkit-text-decoration: var(--link-dark-text-decoration);
+          text-decoration: none;
+          text-decoration: var(--link-dark-text-decoration);
+  font-weight: 600;
+  font-weight: var(--link-dark-font-weight);
+}
+.content-block__link:link {
+  color: #333;
+  color: var(--link-dark-color);
+}
+.content-block__link:visited {
+  color: #333;
+  color: var(--link-dark-visited-color);
+}
+.content-block__link:hover,
+.content-block__link:focus {
+  color: #0587d4;
+  color: var(--link-dark-color--hover);
+  -webkit-text-decoration: underline;
+  -webkit-text-decoration: var(--link-dark-text-decoration--hover);
+          text-decoration: underline;
+          text-decoration: var(--link-dark-text-decoration--hover);
+}
+.content-block__link:active {
+  color: #095683;
+  color: var(--link-dark-color--active);
+  -webkit-text-decoration: underline;
+  -webkit-text-decoration: var(--link-dark-text-decoration--active);
+          text-decoration: underline;
+          text-decoration: var(--link-dark-text-decoration--active);
+}
+.content-block__link:focus {
+  outline-color: #3fb3f7;
+  outline-color: var(--focus);
+}
+.content-block__link .trailing-icon .svg-icon.icon-sm {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+.content-block__help-link {
+  background-color: #fff;
+  background-color: var(--white);
+}
+.empty-state-block {
+  max-width: 600px;
+  margin: 0 auto;
+  margin-top: 1.5rem;
+}
+.empty-state-section {
+  margin-top: 2rem;
+}
+.empty-state-section-list {
+  padding: 0;
+}
+.empty-state-section-list li {
+  list-style: none;
+  margin-bottom: 1rem;
 }
 
 
