@@ -1,7 +1,499 @@
 <?xml version='1.1' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.40">
+  <actions>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobAction plugin="pipeline-model-definition@1.7.2"/>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction plugin="pipeline-model-definition@1.7.2">
+      <jobProperties/>
+      <triggers/>
+      <parameters>
+        <string>Insecure</string>
+        <string>mountNumber</string>
+        <string>namespace</string>
+        <string>Openshift</string>
+        <string>apiServer</string>
+        <string>resourceName</string>
+        <string>mountType</string>
+        <string>resourceType</string>
+      </parameters>
+      <options/>
+    </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
+  </actions>
+  <description></description>
   <keepDependencies>false</keepDependencies>
-  <properties/>
+  <properties>
+    <hudson.plugins.jira.JiraProjectProperty plugin="jira@3.1.1"/>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>apiServer</name>
+          <description>API Server of The Cluster</description>
+          <defaultValue>https://IP:PORT</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>Insecure</name>
+          <description>Insecure flag</description>
+          <defaultValue>false</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>Openshift</name>
+          <description>Is it Openshift Cluster?</description>
+          <defaultValue>false</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>namespace</name>
+          <description>You can manually type Namespace/Project. Leave it empty if you want to choose from namespace list</description>
+          <defaultValue>{namespace/project}</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>resourceType</name>
+          <description>Select Resource Type to Mount</description>
+          <choices>
+            <string>Deployment</string>
+            <string>Deployment Config</string>
+            <string>Statefulset</string>
+            <string>Daemonset</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>resourceName</name>
+          <description>You can manually type Workload Name. If nothing is typed you will choose combobox</description>
+          <defaultValue>{workloadName}</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>mountType</name>
+          <description>Select Mount Type</description>
+          <choices>
+            <string>Secret Volume Mount</string>
+            <string>Configmap Volume Mount</string>
+            <string>Define all of the Secret data as Environment Variable</string>
+            <string>Define all of the ConfigMap data as Environment Variable</string>
+            <string>Define specific Secret data as Environment Variable</string>
+            <string>Define specific ConfigMap data as Environment Variable</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>mountNumber</name>
+          <description>Number of Secret or Config Map to create</description>
+          <defaultValue>1</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.83">
+    <script>def apiRequest(String apiReq, String method) {
+	withCredentials([string(credentialsId: &apos;jenkins-sa-token&apos;, variable: &apos;TOKEN&apos;)]) {
+		sh (
+			script: &quot;curl ${insecure} -X ${method} -H \&quot;Authorization: Bearer ${TOKEN}\&quot; ${apiReq}&quot;,
+			returnStdout: true
+		)
+	}
+}
+pipeline {
+	agent any
+	parameters {
+		string       ( name: &apos;apiServer&apos;    , defaultValue: &apos;https://IP:PORT&apos;                                                      , description: &apos;API Server of The Cluster&apos;                                                                                                                                                                                                )
+		booleanParam ( name: &apos;Insecure&apos;     , defaultValue: false                                                                  , description: &apos;Insecure flag&apos;                                                                                                                                                                                                            )
+		booleanParam ( name: &apos;Openshift&apos;    , defaultValue: false                                                                  , description: &apos;Is it Openshift Cluster?&apos;                                                                                                                                                                                                 )
+		string       ( name: &apos;namespace&apos;    , defaultValue: &apos;{namespace/project}&apos;                                                  , description: &apos;You can manually type Namespace/Project. Leave it empty if you want to choose from namespace list&apos;                                                                                                                        )
+		choice       ( name: &apos;resourceType&apos; , choices: [&apos;Deployment&apos;,&apos;Deployment Config&apos;,&apos;Statefulset&apos;,&apos;Daemonset&apos;]                , description: &apos;Select Resource Type to Mount&apos;                                                                                                                                                                                            )
+		string       ( name: &apos;resourceName&apos; , defaultValue: &apos;{workloadName}&apos;                                                       , description: &apos;You can manually type Workload Name. If nothing is typed you will choose combobox&apos;                                                                                                                                        )
+		choice       ( name: &apos;mountType&apos;    , choices: [&apos;Secret Volume Mount&apos;,&apos;Configmap Volume Mount&apos;,&apos;Define all of the Secret data as Environment Variable&apos;,&apos;Define all of the ConfigMap data as Environment Variable&apos;,&apos;Define specific Secret data as Environment Variable&apos;,&apos;Define specific ConfigMap data as Environment Variable&apos;] , description: &apos;Select Mount Type&apos; )
+		string       ( name: &apos;mountNumber&apos;  , defaultValue: &apos;1&apos;                                                                    , description: &apos;Number of Secret or Config Map to create&apos;                                                                                                                                                                                 )
+	}
+	stages {
+        stage(&apos;Selecting Project and Resource Type&apos;) {
+            steps {
+				script {
+					if      ( &quot;${params.resourceType}&quot; == &quot;Deployment&quot;        ) { resourceType = &quot;deployments&quot;       }
+					else if ( &quot;${params.resourceType}&quot; == &quot;Deployment Config&quot; ) { resourceType = &quot;deploymentconfigs&quot; }
+					else if ( &quot;${params.resourceType}&quot; == &quot;Statefulset&quot;       ) { resourceType = &quot;statefulsets&quot;      }
+					else if ( &quot;${params.resourceType}&quot; == &quot;Daemonset&quot;         ) { resourceType = &quot;daemonsets&quot;        }
+					if ( params.Insecure  == true ) { insecure = &quot;-k&quot; }
+					else                            { insecure =  &quot;&quot;  }
+					if ( params.Openshift == true ) { request  = &quot;apis/project.openshift.io/v1/projects&quot; }
+					else                            { request  = &quot;api/v1/namespaces&quot;  }
+					namespaces = readJSON text: apiRequest(&quot;\&quot;${params.apiServer}/${request}\&quot;&quot;, &quot;GET&quot;)
+					if ( &quot;${params.namespace}&quot; == &quot;&quot; ) {
+						namespace = input (
+							message: &quot;Select Namespace/Project&quot;,
+							ok: &quot;OK&quot;,
+							parameters: [ choice (name: &apos;namespace&apos;, choices: namespaces.items.metadata.name) ]
+						)
+					}
+					else {
+						assert namespaces.items.metadata.name.find { it == &quot;${params.namespace}&quot; }
+						namespace = &quot;${params.namespace}&quot;
+					}
+					resourceList = readJSON text: apiRequest(&quot;\&quot;${params.apiServer}/apis/apps/v1/namespaces/${namespace}/${resourceType}\&quot;&quot;, &quot;GET&quot;)
+					if ( &quot;${params.resourceName}&quot; == &quot;&quot; ) {
+						if ( resourceList.items.metadata.name.size() != 0 ) {
+							resourceName = input (
+								message: &quot;Select Resource&quot;,
+								ok: &quot;OK&quot;,
+								parameters: [ choice (name: &apos;resourceName&apos;, choices: resourceList.items.metadata.name) ]
+							)
+						}
+					}
+					else {
+						assert resourceList.items.metadata.name.find { it == &quot;${params.resourceName}&quot; }
+						resourceName = &quot;${params.resourceName}&quot;
+					}
+					containerList = readJSON text: apiRequest(&quot;\&quot;${params.apiServer}/apis/apps/v1/namespaces/${namespace}/${resourceType}/${resourceName}\&quot;&quot;, &quot;GET&quot;)
+					if ( params.mountType == &quot;Secret Volume Mount&quot; || params.mountType == &quot;Define specific Secret data as Environment Variable&quot; || params.mountType == &quot;Define all of the Secret data as Environment Variable&quot;  ) {
+						mountTypeLocal = &quot;Secret&quot;
+						dataType       = &quot;secrets&quot;
+						dataPref       = &quot;secretName&quot;
+						mountType      = &quot;secret&quot;
+					}
+					else if ( params.mountType == &quot;Configmap Volume Mount&quot; || params.mountType == &quot;Define specific ConfigMap data as Environment Variable&quot; || params.mountType == &quot;Define all of the ConfigMap data as Environment Variable&quot; ) {
+						mountTypeLocal = &quot;ConfigMap&quot;
+						dataType       = &quot;configmaps&quot;
+						dataPref       = &quot;name&quot;
+						mountType      = &quot;configMap&quot;
+					}
+					else { 
+						echo &quot;Error&quot;
+						exit 1
+					}
+				}
+			}
+		}
+		stage(&apos;Create Stage&apos;) {
+			steps {
+				script {
+					def plainMounts = []
+					def paramchoice = []
+					int x = 0
+					if ( (params.mountNumber as Integer) &gt; 0 ) {
+						for ( int i = 0; i &lt; (params.mountNumber as Integer)*2; i = i + 2 ) {
+							paramchoice [  i  ] = string ( name: &quot;mountName-${i/2}&quot; , defaultValue: &quot;example-${i/2}&quot; , description: &quot;kind: ${mountTypeLocal}\nmetadata:\n  namespace: ${namespace}\n  name:&quot; )
+							paramchoice [i + 1] = string ( name: &quot;numberOf-${i/2}&quot;  , defaultValue: &quot;1&quot;              , description: &quot;Number of File/Variable/Data to be added in ${mountTypeLocal}-${i/2}&quot;   )
+						}
+						mountInfo = input (
+							message: &quot;Enter ${mountTypeLocal} Information&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+							for (int j = 0; j &lt; (mountInfo.(&quot;numberOf-&quot; + &quot;${i}&quot;) as Integer); j++ ) {
+								paramchoice [  x  ] = string ( name: &quot;keyName-${x/2}&quot; , defaultValue: &quot;key-${x/2}&quot;   , description: &quot;kind: ${mountTypeLocal}\nmetadata:\n  namespace: ${namespace}\n  name: ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)}\ndata:&quot; )
+								paramchoice [x + 1] = text   ( name: &quot;keyInfo-${x/2}&quot; , defaultValue: &quot;value-${x/2}&quot; , description: &quot;key-${x/2}&apos;s Value-${x/2}&quot; )
+								x = x + 2
+							}
+						}
+						x = 0
+						plainMounts = input (
+							message: &quot;Enter Values of ${mountTypeLocal}&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+							tempResult = []
+							for (int j = 0; j &lt; (mountInfo.(&quot;numberOf-&quot; + &quot;${i}&quot;) as Integer); j++ ) {
+								if      ( params.mountType == &quot;Secret Volume Mount&quot;    || params.mountType == &quot;Define specific Secret data as Environment Variable&quot;    || params.mountType == &quot;Define all of the Secret data as Environment Variable&quot;    ) { keyInfo = sh ( script:&quot;echo \&quot;${plainMounts.(&quot;keyInfo-&quot; + &quot;${x}&quot;)}\&quot; | base64 | tr -d &apos;\n&apos;&quot;                  , returnStdout: true ).trim() }
+								else if ( params.mountType == &quot;Configmap Volume Mount&quot; || params.mountType == &quot;Define specific ConfigMap data as Environment Variable&quot; || params.mountType == &quot;Define all of the ConfigMap data as Environment Variable&quot; ) { keyInfo = sh ( script:&quot;echo \&quot;${plainMounts.(&quot;keyInfo-&quot; + &quot;${x}&quot;)}\&quot; | sed \&apos;:a;N;\$!ba;s/\\n/\\\\\\\\n/g\&apos;&quot; , returnStdout: true ).trim() }
+								tempResult [j] = &quot;\\\&quot;&quot; + plainMounts.(&quot;keyName-&quot; + &quot;${x}&quot;) + &quot;\\\&quot;:&quot; + &quot;\\\&quot;&quot; + keyInfo + &quot;\\\&quot;&quot;
+								x++
+							}
+							data = sh ( script: &quot;echo {\\\&quot;apiVersion\\\&quot;: \\\&quot;v1\\\&quot;,\\\&quot;data\\\&quot;: {&quot; + tempResult + &quot;}, \\\&quot;kind\\\&quot;: \\\&quot;&quot; + mountTypeLocal + &quot;\\\&quot;,\\\&quot;metadata\\\&quot;: {\\\&quot;name\\\&quot;: \\\&quot;&quot; + mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) + &quot;\\\&quot;}}&quot;, returnStdout: true ).trim().replaceAll(&apos;\\]&apos;,&apos;&apos;).replaceAll(&apos;\\[&apos;,&apos;&apos;)
+							apiRequest(&quot;-H \&quot;Content-Type: application/json\&quot; \&quot;${params.apiServer}/api/v1/namespaces/${namespace}/${dataType}\&quot; --data \&apos;${data}\&apos;&quot;, &quot;POST&quot;)
+						}
+					}
+					else {
+						echo &quot;Should be greater than 1&quot;
+					}
+				}
+			}
+		}
+		stage(&apos;Mount Stage&apos;) {
+			steps {
+				script {
+					def mountVol    = []
+					def paramchoice = []
+					def refInput    = []
+					def directInput = []
+					def envMounts   = []
+					def tempResult  = []
+					def data        = []
+					def tempKeyRefs = []
+					def result      = []
+					int x = 0
+					int y = 0
+					mountTypeList = readJSON text: apiRequest(&quot;\&quot;${params.apiServer}/api/v1/namespaces/${namespace}/${dataType}\&quot;&quot;, &quot;GET&quot;)
+					if ( params.mountType == &quot;Secret Volume Mount&quot; || params.mountType == &quot;Configmap Volume Mount&quot; ) {
+						def volumeList          = []
+						def indexOf             = []
+						def isSpecific          = []
+						def limit               = []
+						def tempItemResult      = []
+						def volmountNumber      = []
+						def containerMounts     = []
+						def volumeMount         = []
+						for ( int i = 0; i &lt; (params.mountNumber as Integer)*2; i = i + 2 ) {
+							paramchoice [  i  ] = string       ( name: &quot;volName_${i/2}&quot;      , defaultValue: &quot;config-volume-${i/2}&quot; , description: &quot;volumes:\n  - name:  ${mountType}: \n    ${dataPref}: ${mountInfo.(&quot;mountName-&quot; + &quot;${i/2}&quot;)}&quot; )
+							paramchoice [i + 1] = booleanParam ( name: &quot;${i/2}-Is Specific?&quot; , defaultValue: false                  , description: &quot;If you want to mount ${mountTypeLocal}&apos;s data to a specific path in the Volume click it&quot;    )
+						}
+						volMounts = input (
+							message: &quot;Decide Volumes Names. \nExample:\n \
+							volumes:\n  - name: vol-name\n    ${mountType}:\n       ${dataPref}: ${mountType}-name\n       ## Is Specific Part ##\n       items:\n       - key: SPECIAL_LEVEL\n         path: keys&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+							volumeList [i] = volMounts.(&quot;volName_&quot; + &quot;${i}&quot;)
+							if ( volMounts.(&quot;${i}-&quot; +&quot;Is Specific?&quot; ) == true ) {
+								paramchoice [x] = string ( name: &quot;${x}&quot; , defaultValue: &quot;1&quot; , description: mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) )
+								indexOf     [x] = mountTypeList.items.metadata.name.findIndexOf { it == mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) }
+								isSpecific  [x] = volMounts.(&quot;volName_&quot; + &quot;${i}&quot;)
+								tempResult  [x] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + volMounts.(&quot;volName_&quot; + &quot;${i}&quot;) + &quot;\\\&quot;, \\\&quot;&quot; + mountType + &quot;\\\&quot;: {\\\&quot;&quot; + dataPref + &quot;\\\&quot;: \\\&quot;&quot; + mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) + &quot;\\\&quot;, \\\&quot;items\\\&quot;: &quot;
+								x++
+							}
+							else {
+								result [i] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + volMounts.(&quot;volName_&quot; + &quot;${i}&quot;) + &quot;\\\&quot;, \\\&quot;&quot; + mountType + &quot;\\\&quot;: {\\\&quot;&quot; + dataPref + &quot;\\\&quot;: \\\&quot;&quot; + mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) + &quot;\\\&quot;}}&quot;
+							}
+						}
+						if ( x != 0 ) {
+							specificVolumeInput = input (
+								message: &quot;Select how many key and path to add specifically for the ${mountType}&quot;,
+								ok: &quot;OK&quot;,
+								parameters: paramchoice
+							)
+							paramchoice = []
+							for ( int i = 0 ; i &lt; specificVolumeInput.size(); i++ ) {
+								if ( x == 1 ) { limit [i] = (specificVolumeInput          as Integer) }
+								else          { limit [i] = (specificVolumeInput.(&quot;${i}&quot;) as Integer) }
+								for ( int j = 0 ; j &lt; limit [i]; j++ ) {
+									paramchoice [  y  ] = choice ( name: &quot;key_${y/2}&quot;  , choices: (mountTypeList.items[indexOf [i]].data.collect { &quot;${it}&quot; }).collect { it.replaceAll(&apos;\n.*&apos;,&apos;&apos;).replaceAll(&apos;=.*&apos;,&apos;&apos;) } , description: &quot;volumes:\n  - name: ${isSpecific [i]}\n    ${mountType}:\n      ${dataPref}: ${mountTypeList.items[indexOf [i]].metadata.name}\n      items:\n      - key: &quot; )
+									paramchoice [y + 1] = string ( name: &quot;path_${y/2}&quot; , defaultValue: &quot;keys_${y/2}&quot;, description: &quot;         path:&quot; )
+									y = y + 2
+								}
+							}
+							keyAndPathInput = input (
+								message: &quot;Select which key to mount and then type path&quot;,
+								ok: &quot;OK&quot;,
+								parameters: paramchoice
+							)
+							paramchoice = []
+							x = 0
+							for ( int i = 0 ; i &lt; specificVolumeInput.size(); i++ ) {
+								for ( int j = 0 ; j &lt; limit[i]; j++ ) {
+									tempItemResult [j] = &quot;{\\\&quot;key\\\&quot;: \\\&quot;&quot; + keyAndPathInput.(&quot;key_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;, \\\&quot;path\\\&quot;: \\\&quot;&quot; + keyAndPathInput.(&quot;path_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;}&quot;
+									x++
+								}
+								tempResult [i] = tempResult [i] + tempItemResult + &quot;}}&quot;
+							}
+						}
+						x = 0
+						for ( int i = 0; i &lt;= (params.mountNumber as Integer); i++ ) {
+							volmountNumber [i] = i
+							if ( volMounts.(&quot;${i}-&quot; +&quot;Is Specific?&quot; ) == true ) {
+								result [i] = tempResult [x++]
+							}
+						}
+						for ( int i = 0; i &lt; result.size(); i++ ) {
+							data = sh ( script: &quot;echo {\\\&quot;spec\\\&quot;:{\\\&quot;template\\\&quot;:{\\\&quot;spec\\\&quot;:{\\\&quot;volumes\\\&quot;: [&quot; + &quot;${result[i]}&quot; + &quot;]}}}}&quot;, returnStdout: true ).trim()
+							apiRequest(&quot;-H \&quot;Content-Type: application/strategic-merge-patch+json\&quot; \&quot;${params.apiServer}/apis/apps/v1/namespaces/${namespace}/${resourceType}/${resourceName}\&quot; --data \&apos;${data}\&apos;&quot;, &quot;PATCH&quot;)
+						}
+						for ( int i = 0; i &lt;  containerList.spec.template.spec.containers.name.size(); i++ ) {
+							paramchoice [i] = choice ( name: &quot;volmountNumber_${i}&quot;, choices: volmountNumber, description: containerList.spec.template.spec.containers[i].name )
+						}
+						totalVolMount = input (
+							message: &quot;Select how many volume to mount on the specified Container&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						x = 0
+						for ( int i = 0; i &lt; containerList.spec.template.spec.containers.name.size(); i++ ) {
+							if ( containerList.spec.template.spec.containers.name.size() == 1 ) { limit = totalVolMount }
+							else { limit = totalVolMount.(&quot;volmountNumber_&quot; + &quot;${i}&quot;) }
+							for ( int j = 0; j &lt; (limit as Integer); j++ ) {
+								paramchoice [  x  ] = choice ( name: &quot;mountName_${x/2}&quot; , choices: volumeList, description: &quot;- containers:\n  name: ${containerList.spec.template.spec.containers[i].name}\n  volumeMounts:\n    - name:&quot; )
+								paramchoice [x + 1] = string ( name: &quot;mountPath_${x/2}&quot; , defaultValue: &quot;/tmp-${x/2}&quot;, description: &quot;  mountPath:&quot; )
+								x = x + 2
+							}
+						}
+						mountVol = input (
+							message: &quot;Now select volumes mount Container to mount the volume. \
+							Then type Volume Mount Name and mountPath for the volume and select ${mountTypeLocal}&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						for ( int i = 0; i &lt; containerList.spec.template.spec.containers.name.size(); i++ ) {
+							x = 0
+							volumeMount = []
+							if ( containerList.spec.template.spec.containers.name.size() == 1 ) { limit = totalVolMount }
+							else { limit = totalVolMount.(&quot;volmountNumber_&quot; + &quot;${i}&quot;) }
+							for ( int j = 0; j &lt; (limit as Integer); j++ ) {
+								volumeMount [x] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + mountVol.(&quot;mountName_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;, \\\&quot;mountPath\\\&quot;: \\\&quot;&quot; + mountVol.(&quot;mountPath_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;}&quot;
+								x++
+							}
+							containerMounts [i] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + containerList.spec.template.spec.containers[i].name + &quot;\\\&quot;, \\\&quot;volumeMounts\\\&quot;: &quot; + volumeMount + &quot;}&quot;
+						}
+						data = sh ( script: &quot;echo {\\\&quot;spec\\\&quot;:{\\\&quot;template\\\&quot;:{\\\&quot;spec\\\&quot;:{\\\&quot;containers\\\&quot;: &quot; + &quot;${containerMounts}&quot; + &quot;}}}}&quot;, returnStdout: true ).trim()
+						apiRequest(&quot;-H \&quot;Content-Type: application/strategic-merge-patch+json\&quot; \&quot;${params.apiServer}/apis/apps/v1/namespaces/${namespace}/${resourceType}/${resourceName}\&quot; --data \&apos;${data}\&apos;&quot;, &quot;PATCH&quot;)
+					}
+					else if ( params.mountType == &quot;Define specific Secret data as Environment Variable&quot; || params.mountType == &quot;Define specific ConfigMap data as Environment Variable&quot; ) {
+						for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+							paramchoice [i] = string ( name: &quot;numberOfKey-${i}&quot; , defaultValue: &quot;1&quot; , description: &quot;Number of Variable/Data to get from ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)} as Environment Variable&quot; ) 
+						}
+						mountList = input (
+							message: &quot;Select how many key to mount from ${mountTypeLocal}&apos;s\n \
+							Example Referenced Value: \n\nenv:\n- name: SPECIAL_LEVEL_KEY\n  valueFrom:\n    ${mountType}KeyRef:\n      name: ${mountType}-name\n      key: SPECIAL_LEVEL&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+							if ( mountList.size() != 1 ) {
+								for (int j = 0; j &lt; (mountList.(&quot;numberOfKey-&quot; +&quot;${i}&quot;) as Integer); j++ ) {
+									paramchoice [  x  ] = string ( name: &quot;keyInfo_${x/2}&quot; , defaultValue: &quot;SPECIAL_LEVEL_KEY-${x/2}&quot; , description: &quot;env:\n- name:&quot; )
+									paramchoice [x + 1] = choice ( name: &quot;keyName_${x/2}&quot; , choices: (mountTypeList.items[ mountTypeList.items.metadata.name.findIndexOf { it == mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) } ].data.collect { &quot;${it}&quot; }).collect { it.replaceAll(&apos;\n.*&apos;,&apos;&apos;).replaceAll(&apos;=.*&apos;,&apos;&apos;) }, description: &quot;  valueFrom:\n    ${mountType}KeyRef:\n      name: ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)}\n      key:&quot; )
+									x = x + 2
+								}
+							}
+							else {
+								paramchoice [0] = string ( name: &quot;keyInfo_${0}&quot; , defaultValue: &quot;SPECIAL_LEVEL_KEY-${0}&quot; , description: &quot;env:\n- name:&quot; )
+								paramchoice [1] = choice ( name: &quot;keyName_${0}&quot; , choices: (mountTypeList.items[ mountTypeList.items.metadata.name.findIndexOf { it == mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) } ].data.collect { &quot;${it}&quot; }).collect { it.replaceAll(&apos;\n.*&apos;,&apos;&apos;).replaceAll(&apos;=.*&apos;,&apos;&apos;) }, description: &quot;  valueFrom:\n    ${mountType}KeyRef:\n      name: ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)}\n      key:&quot; )
+							}
+						}
+						refMounts = input (
+							message: &quot;Enter Values of ${mountTypeLocal} values.&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						x = 0
+						for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+							if ( mountList.size() != 1 ) {
+								for (int j = 0; j &lt; (mountList.(&quot;numberOfKey-&quot; + &quot;${i}&quot;) as Integer); j++ ) {
+									tempKeyRefs [x] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + refMounts.(&quot;keyInfo_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;, \\\&quot;valueFrom\\\&quot;: {\\\&quot;&quot; + mountType + &quot;KeyRef\\\&quot;: {\\\&quot;name\\\&quot;: \\\&quot;&quot; + mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) + &quot;\\\&quot;,\\\&quot;key\\\&quot;: \\\&quot;&quot; + refMounts.(&quot;keyName_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;}}}&quot;
+									x++
+								}
+							}
+							else {
+								for (int j = 0; j &lt; (mountList as Integer); j++ ) {
+									tempKeyRefs [x] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + refMounts.(&quot;keyInfo_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;, \\\&quot;valueFrom\\\&quot;: {\\\&quot;&quot; + mountType + &quot;KeyRef\\\&quot;: {\\\&quot;name\\\&quot;: \\\&quot;&quot; + mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) + &quot;\\\&quot;,\\\&quot;key\\\&quot;: \\\&quot;&quot; + refMounts.(&quot;keyName_&quot; + &quot;${x}&quot;) + &quot;\\\&quot;}}}&quot;
+									x++
+								}
+							}
+						}
+						for ( int i = 0; i &lt; containerList.spec.template.spec.containers.name.size(); i++ ) {
+							x = 0
+							for ( int j = 0; j &lt; (params.mountNumber as Integer); j++ ) {
+								if ( mountList.size() != 1 ) {
+									for ( int k = 0; k &lt; (mountList.(&quot;numberOfKey-&quot; + &quot;${j}&quot;) as Integer); k++ ) {
+										paramchoice [y] = booleanParam ( name: &quot;${containerList.spec.template.spec.containers[i].name} ${refMounts.(&quot;keyInfo_&quot; + &quot;${x}&quot;)}&quot; , defaultValue: false , description: &quot;Mount ${refMounts.(&quot;keyInfo_&quot; + &quot;${x}&quot;)} to ${containerList.spec.template.spec.containers[i].name}?&quot; )
+										x++
+										y++
+									}
+								}
+								else {
+									for ( int k = 0; k &lt; (mountList as Integer); k++ ) {
+										paramchoice [y] = booleanParam ( name: &quot;${containerList.spec.template.spec.containers[i].name} ${refMounts.(&quot;keyInfo_&quot; + &quot;${x}&quot;)}&quot; , defaultValue: false , description: &quot;Mount ${refMounts.(&quot;keyInfo_&quot; + &quot;${x}&quot;)} to ${containerList.spec.template.spec.containers[i].name}?&quot; )
+										x++
+										y++
+									}
+								}
+							}
+						}
+						containerRefMount = input (
+							message: &quot;To which containers mount the environment variables?&quot;,
+							ok: &quot;OK&quot;,
+							parameters: paramchoice
+						)
+						paramchoice = []
+						for ( int i = 0; i &lt; containerList.spec.template.spec.containers.name.size(); i++ ) {
+							tempRefResult = []
+							x = 0
+							if ( containerList.spec.template.spec.containers.name.size() == 1 &amp;&amp; (params.mountNumber as Integer) == 1 &amp;&amp; (mountList as Integer) == 1 &amp;&amp; containerRefMount == true ) {
+								tempRefResult = tempKeyRefs
+							}
+							else {
+								for ( int j = 0; j &lt; (params.mountNumber as Integer); j++ ) {
+									if ( mountList.size() != 1 ) {
+										for ( int k = 0; k &lt; (mountList.(&quot;params.mountNumber-&quot; + &quot;${j}&quot;) as Integer); k++ ) {
+											if ( containerRefMount.( &quot;${containerList.spec.template.spec.containers[i].name} ${refMounts.(&quot;keyInfo_&quot; + &quot;${k}&quot;)}&quot; ) == true ) {
+												tempRefResult.add( tempKeyRefs [x] )
+											}
+											x++
+										}
+									}
+									else {
+										for ( int k = 0; k &lt; (mountList as Integer); k++ ) {
+											if ( containerRefMount.( &quot;${containerList.spec.template.spec.containers[i].name} ${refMounts.(&quot;keyInfo_&quot; + &quot;${k}&quot;)}&quot; ) == true ) {
+												tempRefResult.add( tempKeyRefs [x] )
+											}
+											x++
+										}
+									}
+								}
+							}
+							if (tempRefResult.size() != 0 ) {
+								result [i] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + containerList.spec.template.spec.containers[i].name + &quot;\\\&quot;, \\\&quot;env\\\&quot;: &quot; + tempRefResult + &quot;}&quot;
+							}
+							else {
+								result     = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + containerList.spec.template.spec.containers[i].name + &quot;\\\&quot;, \\\&quot;env\\\&quot;: &quot; + tempRefResult + &quot;}&quot;
+							}
+							data = sh ( script: &quot;echo {\\\&quot;spec\\\&quot;:{\\\&quot;template\\\&quot;:{\\\&quot;spec\\\&quot;:{\\\&quot;containers\\\&quot;: &quot; + &quot;${result}&quot; + &quot;}}}}&quot;, returnStdout: true ).trim()
+							apiRequest(&quot;-H \&quot;Content-Type: application/strategic-merge-patch+json\&quot; \&quot;${params.apiServer}/apis/apps/v1/namespaces/${namespace}/${resourceType}/${resourceName}\&quot; --data \&apos;${data}\&apos;&quot;, &quot;PATCH&quot;)
+						}
+					}
+					else if ( params.mountType == &quot;Define all of the Secret data as Environment Variable&quot; || params.mountType == &quot;Define all of the ConfigMap data as Environment Variable&quot; ) {
+						def tempEnvRefs    = []
+						def tempDirResult  = []
+						if ( (params.mountNumber as Integer) != 0 ) {
+							for ( int i = 0; i &lt; (params.mountNumber as Integer); i++ ) {
+								tempEnvRefs [i] = &quot;{\\\&quot;&quot; + mountType + &quot;Ref\\\&quot;:{ \\\&quot;name\\\&quot;: \\\&quot;&quot; + mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;) + &quot;\\\&quot;}}&quot;
+							}
+							x = 0
+							for ( int i = 0; i &lt; containerList.spec.template.spec.containers.name.size(); i++ ) {
+								for ( int j = 0; j &lt; (params.mountNumber as Integer); j++ ) {
+									paramchoice [x] = booleanParam ( name: &quot;${containerList.spec.template.spec.containers[i].name} ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)}&quot; , defaultValue: false , description: &quot;Mount ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)} to ${containerList.spec.template.spec.containers[i].name}?&quot; )
+									x++
+								}
+							}
+							containerDirMount = input (
+								message: &quot;To which containers mount the environment variables?&quot;,
+								ok: &quot;OK&quot;,
+								parameters: paramchoice
+							)
+							paramchoice = []
+							if ( containerList.spec.template.spec.containers.name.size() == 1 &amp;&amp; (params.mountNumber as Integer) == 1 &amp;&amp; containerDirMount == true ) {
+								result = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + containerList.spec.template.spec.containers[0].name + &quot;\\\&quot; , \\\&quot;envFrom\\\&quot;: &quot; + tempEnvRefs + &quot;}&quot;
+							}
+							else {
+								for ( int i = 0; i &lt; containerList.spec.template.spec.containers.name.size(); i++ ) {
+									tempDirResult = []
+									for ( int j = 0; j &lt; (params.mountNumber as Integer); j++ ) {
+										if ( containerDirMount.( &quot;${containerList.spec.template.spec.containers[i].name} ${mountInfo.(&quot;mountName-&quot; + &quot;${i}&quot;)}&quot; ) == true ) {
+											tempDirResult.add( tempEnvRefs [j] )
+										}
+									}
+									if (tempDirResult.size() != 0 ) {
+										result [i] = &quot;{\\\&quot;name\\\&quot;: \\\&quot;&quot; + containerList.spec.template.spec.containers[i].name + &quot;\\\&quot; , \\\&quot;envFrom\\\&quot;: &quot; + tempDirResult + &quot;}&quot;
+									}
+								}
+							}
+							data = sh ( script: &quot;echo {\\\&quot;spec\\\&quot;:{\\\&quot;template\\\&quot;:{\\\&quot;spec\\\&quot;:{\\\&quot;containers\\\&quot;: &quot; + &quot;${result}&quot; + &quot;}}}}&quot;, returnStdout: true ).trim()
+							apiRequest(&quot;-H \&quot;Content-Type: application/strategic-merge-patch+json\&quot; \&quot;${params.apiServer}/apis/apps/v1/namespaces/${namespace}/${resourceType}/${resourceName}\&quot; --data \&apos;${data}\&apos;&quot;, &quot;PATCH&quot;)
+						}
+					}
+				}
+			}
+		}
+	}
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
   <triggers/>
   <disabled>false</disabled>
 </flow-definition>
